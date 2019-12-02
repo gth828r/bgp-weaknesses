@@ -20,18 +20,25 @@
 Imagine you are listening to a playlist on Youtube and the music suddenly stops.  Other websites still work, so this must be a problem at Youtube, right?  Back in 2008, something similar happened to people across the globe, but it was not caused by technical issues at Youtube.  Instead, the state run network of Pakistan caused Youtube traffic to be diverted into the network equivalent of a black hole.  It turned out that Pakistan was trying to block Youtube for users within its borders, but it still managed to take Youtube down for many users across the world.  How could a network in Pakistan cause users in Boston to be unable to reach services hosted in California?  And can this same technique be used by cyber criminals to steal sensitive information?  This chapter presents why this is possible and what can be done to mitigate it.
 
 \section{Internet Routing: Address and Number Assignment}
-Before understanding the weaknesses of Internet routing, one must understand how the Internet routing system is intended to work.  Organizations rely on Internet Service Providers (ISPs) to direct their network traffic to the appropriate destinations.  Any organization that wants to connect to the Internet must be loaned an IP address from an ISP or assigned a block of IP addresses from a \emph{Regional Internet Registry (RIR)}.  RIRs manage IP address alloation for regions around the world, and Figure \ref{fig:rirs} shows examples of RIRs and their associated regions.  As depicted in Figure \ref{fig:rir-assignments}, organizations that are assigned IP addresses by an RIR must also be assigned an \emph{Autonomous System Number (ASN)}.  ASNs are unique numbers which identify an organization's network in the global Internet.
-
-\begin{figure}
+\begin{figure}[b]
   \includegraphics[width=\linewidth]{images/rirs.png}
   \caption{Regional Internet Registries manage the IP block assignment and Autonomous Systsem Number assignment for geographically local areas.}
   \label{fig:rirs}
 \end{figure}
+Before understanding the weaknesses of Internet routing, one must understand how the Internet routing system is intended to work.  Organizations rely on Internet Service Providers (ISPs) to direct their network traffic to the appropriate destinations.  Any organization that wants to connect to the Internet must be loaned an IP address from an ISP or assigned a block of IP addresses from a \emph{Regional Internet Registry (RIR)}.  RIRs manage IP address alloation for regions around the world, and Figure \ref{fig:rirs} shows examples of RIRs and their associated regions.  As depicted in Figure \ref{fig:rir-assignments}, organizations that are assigned IP addresses by an RIR must also be assigned an \emph{Autonomous System Number (ASN)}.  ASNs are unique numbers which identify an organization's network in the global Internet.
 
-\begin{figure}
-  \includegraphics[width=\linewidth]{images/rir-assignments.jpg}
+\begin{figure}[ht]
+  \begin{center}
+    \includegraphics[width=0.6\linewidth]{images/rir-assignments.jpg}
+  \end{center}
   \caption{Regional Internet Registries often assign a single ASN for each organization.  They also often assign one or many contiguous IP blocks to those organizations.}
   \label{fig:rir-assignments}
+\end{figure}
+
+\begin{figure}[hb]
+  \includegraphics[width=\linewidth]{images/bgp-ops.jpg}
+  \caption{The Border Gateway Protocol is used to announce the source of IP prefixes into the global Internet and to create paths from other organization's networks to those IP addresses.  The blue path represents the flow of BGP announcements for the Youtube IP prefix, and the green path represents the user's actual Youtube traffic.}
+  \label{fig:bgp-ops}
 \end{figure}
 
 \section{Internet Routing Operation}
@@ -40,94 +47,77 @@ In order to reach services like Youtube, users must be provided with a path to r
  \item Youtube needs to announce where those IP addresses exist in the Internet
  \item The global Internet must find the paths to reach Youtube
 \end{enumerate}
-The \emph{Border Gateway Protocol (BGP)} is used to solve these problems, and its operation is illustrated in Figure \ref{fig:bgp-ops}.  Continuing with the Youtube example, Youtube announces those addresses as an IP prefix \footnote{An IP prefix could be one of the blocks assigned to the organization, or it could be a contiguous subset of IP addresses within that block.} into its ISP, which takes care of challenge 1.  In that same announcement, Youtube also announces its ASN.  When Youtube's ISP connects to another network, it appends its own ASN after Youtube's ASN to make an ordered list that describes a path.  This process continues throughout the Internet, allowing for each network to know which path or paths it can take to reach Youtube.  These paths, known as \emph{AS paths}, all begin with Youtube's ASN, which maps Youtube's ASN to it's IP space in the global Internet.  These AS paths are used to address challenge 2.
+The \emph{Border Gateway Protocol (BGP)} is used to solve these problems, and its operation is illustrated in Figure \ref{fig:bgp-ops}.  Continuing with the Youtube example, Youtube announces those addresses as an IP prefix\footnote{An IP prefix could be one of the blocks assigned to the organization, or it could be a contiguous subset of IP addresses within that block.} into its ISP, which takes care of challenge 1.
 
-If there are multiple paths to a target IP address, BGP uses a multi-step decision process to determine which route is preferred\footnote{The BGP decision process is not standardized, and it may vary across different implementations.  Many implementations are very similar.}.  One of the most critical steps in the decision process for ISPs is the AS path length.  The path with the shortest AS path length to a given destination is often the preferred route.
+In that same announcement, Youtube also announces its ASN.  When Youtube's ISP connects to another network, it appends its own ASN after Youtube's ASN to make an ordered list that describes a path.  This process continues throughout the Internet, allowing for each network to know which path or paths it can take to reach Youtube.  These paths, known as \emph{AS paths}, all begin with Youtube's ASN, which maps Youtube's ASN to it's IP space in the global Internet.  These AS paths are used to address challenge 2.
 
-\begin{figure}
-  \includegraphics[width=\linewidth]{images/bgp-ops.jpg}
-  \caption{The Border Gateway Protocol is used to announce the source of IP prefixes into the global Internet and to create paths from other organization's networks to those IP addresses.  The blue path represents the flow of BGP announcements for the Youtube IP prefix, and the green path represents the user's actual Youtube traffic.}
-  \label{fig:bgp-ops}
-\end{figure}
+If there are multiple paths to a target IP address, BGP uses a multi-step decision process to determine which route is preferred\footnote{The BGP decision process is not standardized, and it may vary across different implementations.  Many implementations are very similar.}.  One of the most critical factors in the decision process for ISPs is the AS path length.  The path with the shortest AS path length to a given destination is often the preferred route.
 
 \section{BGP Hijacking}
-Understanding how BGP operates, it is now helpful to revisit the Youtube outage previously introduced.  Pakistan's state run network had attempted to take all traffic in its network destined for Youtube's IP prefixes and drop it.  By mistake, this change in their internal network was announced to the rest of the Internet via BGP.  Figure {fig:bgp-hijack} illustrates what may have happened for some users who experienced a Youtube outage.  This was an example of \emph{BGP Hijacking}, and it illustrates that the BGP has an inherent weakness: the receiver of the BGP announcement trusts the sender of the announcement, who in turn trusted the sender of the previous BGP announcement, and so on.  This trust model is known as \emph{transitive trust}, and it is part of why BGP scales well and part of why BGP is not secure.  BGP Hijacking can be unintentional, such as the Youtube example, but it can also be weaponized by malicious actors for data interception, eavesdropping, or denial of service.  Both intentional and unintentional BGP hijacking occur on a near-daily basis[1], emphasizing why it is critical to deploy mitigation techniques across the Internet.
+Understanding how BGP operates, it is now helpful to revisit the Youtube outage previously introduced.  Pakistan's state run network had attempted to take all traffic in its network destined for Youtube's IP prefixes and drop it.  By mistake, this change in their internal network was announced to the rest of the Internet via BGP.  Figure {fig:bgp-hijack} illustrates what may have happened for some users who experienced a Youtube outage.  This was an example of \emph{BGP hijacking}, and it illustrates that the BGP has an inherent weakness: the receiver of the BGP announcement trusts the sender of the announcement, who in turn trusted the sender of the previous BGP announcement, and so on.  This trust model is known as \emph{transitive trust}, and it is part of why BGP is not secure.  BGP hijacking can be unintentional, such as the Youtube example, but it can also be intentionally performed by malicious actors for data interception, eavesdropping, or denial of service.  Both intentional and unintentional BGP hijacking occur on a near-daily basis\cite{b1}.
 
-\begin{figure}
+\begin{figure}[ht]
   \includegraphics[width=\linewidth]{images/bgp-hijack.jpg}
   \caption{The state run network of Pakistan announced ownership of Youtube's IP prefixes to the rest of the world.  For many users, this ended up being the shortest AS path between them and Youtube.  The blue path represents the flow of BGP announcements for the Youtube IP prefix, and the green path represents the user's actual Youtube traffic.}
   \label{fig:bgp-hijack}
 \end{figure}
 
 \section{BGP Hijacking Mitigation Techniques}
-There are various techniques which can me used to mitigate the weaknesses in BGP, each with varying effectiveness and cost.  Three techniques discussed below are \emph{Filtering}, \emph{Resource Public Key Infrastructure (RPKI)}, and the \emph{BGPsec} protocol.  Filtering has been used for a number of years, while RPKI and BGPsec are only recently seeing adoption.  A brief comparison of these models is presented at the end of this chapter, but a full comparison is ouside the scope of this text.
+Multiple techniques exist to mitigate the weaknesses in BGP, each with varying effectiveness and cost.  Three techniques discussed below are \emph{Filtering}, \emph{Resource Public Key Infrastructure (RPKI)}, and \emph{BGPsec}.  Filtering has been used for a number of years, while RPKI and BGPsec are only recently seeing adoption.  A brief comparison of these models is presented in Table \ref{tab:bgp-hijacking-comparison} at the end of this chapter.
 
 \subsection{Filtering}
-Filtering is a longstanding technique to avoid accidental announcements and prevent propagating incorrect announcements from neighbors.  There are numerous BGP filtering methods, but two examples are AS path filtering and IP prefix filtering.  AS path filtering is a technique where only a set of whitelisted ASNs are allowed to be sent or accepted in BGP announcements.  This is effective at ISPs which directly interface with organizations, as those ISPs can choose to only accept AS paths comprised of the organization's ASN\footnote{Organizations can similarly apply AS path filtering on egress of their announcements to avoid accidental propagation of incorrect ASNs}.  IP prefix filtering is similar to AS path filtering, only it is applied to specific whitelisted IP prefixes.  Filtering methods have been around for a long time, and given that BGP hijacking events are still relatively frequent, it is clear that newer methods should be deployed to secure Internet routing.
+Filtering is a technique to prevent propagating incorrect announcements from neighbors.  There are numerous BGP filtering methods, with two examples being AS path filtering and IP prefix filtering.  AS path filtering only allows a set of whitelisted ASNs to be sent or accepted in BGP announcements.  This is effective for ISPs near the edge of the Internet, as those ISPs can choose to only accept AS paths comprised of the organization's ASN\footnote{Organizations can similarly apply AS path filtering on egress of their announcements to avoid accidental propagation of incorrect ASNs}.  IP prefix filtering is similar to AS path filtering, only it is applied to specific whitelisted IP prefixes.  Given that BGP hijacking events are still relatively frequent, it appears that filtering alone is insufficient to prevent BGP hijacking.
 
 \subsection{Resource Public Key Infrastructure for Origin Validation}
-As noted previously, RIRs have a central mapping of IP prefixes to ASNs, and the first ASN in an ASN path should correspond to the associated IP prefix in an announcement.  Can this mapping of ASNs to IP prefixes be used to validate the origin of BGP announcements?  This approach is used by operators who uncover BGP Hijacking events after they have occurred, and it is also the primary concept behind Resource Public Key Infrastructure (RPKI).  RPKI attempts to automate this approach by having the RIRs host digitally signed information, known as \emph{Route Organization Authorizations (ROAs)} confirming that an AS has the authority to announce an IP prefix.  Different RIRs implement RPKI processes differently, but one example is presented in Figure \ref{fig:rpki-assignment}.  Figure \ref{fig:rpki-ops} illustrates how a BGP router can validate the origin of an announced prefix.
+As noted previously, RIRs have a central mapping of IP prefixes to ASNs, and the first ASN in an ASN path should correspond to the associated IP prefix in an announcement.  Can the mapping of ASNs to IP prefixes be used to validate the origin of BGP announcements?  This approach is used by operators who uncover BGP hijacking events after they have occurred, and it is also the concept behind Resource Public Key Infrastructure (RPKI).  RPKI attempts to automate this approach by having the RIRs host digitally signed information, known as \emph{Route Organization Authorizations (ROAs)} confirming that an AS has the authority to announce an IP prefix.  Different RIRs implement RPKI processes differently, but one example is presented in Figure \ref{fig:rpki-assignment}.  Figure \ref{fig:rpki-ops} illustrates how a BGP router can validate the origin of an announced prefix.
 
-\begin{figure}
+\begin{figure}[hp]
   \includegraphics[width=\linewidth]{images/rir-rpki-assignments.jpg}
   \caption{This is an example of how ARIN implements RPKI.  The organization is assigned an ASN and a set of IP blocks.  If the organization participates in RPKI, then it generates a private key and a public certificate.  It sends the public certificate to be signed by the RIR.  The organization also generates ROA requests for its ASN and IP blocks, and it signs the request with its private key.  If ARIN deems the ROA request valid, then it generates an ROA and places it in the ROA database, where it can be used to validate the origin of BGP prefixes.}
   \label{fig:rpki-assignment}
 \end{figure}
 
-\begin{figure}
+\begin{figure}[hp]
   \includegraphics[width=\linewidth]{images/rpki-ops.jpg}
   \caption{If RPKI origin validation is in use, then routers can verify each BGP announcement by verifying that the first ASN in the AS path matches the origin of the IP prefix in the ROA database.  If there is a match, then the announcement is accepted and the associated routes may be propagated through the Internet.  If there is no match, then the route in the advertisement can be rejected.}
   \label{fig:rpki-ops}
 \end{figure}
 
-\subsection{BGPsec}
-RPKI does a good job of preventing many BGP Hijacking issues, but it doesn't resolve all of them.  Consider malicious actors who want to intercept data.  RPKI mitigates claiming ownership of an IP prefix which they do not own, but it does not prevent them from creating a bogus announcement with an AS path through their network to an IP prefix associated with the correct ASN, as seen in Figure \ref{fig:bgp-inercept}.  Once traffic arrives in the malicious organization's network, they can terminate it or observe and forward it.  A protocol known as BGPsec attempts to mitigate this issue by leveraging the RPKI infrastructure not only for prefix origin validation, but also for hop-by-hop AS path change validation.  BGPsec replaces the AS path with what it calls a \emph{BGPsec path}, and places requirements on how the path can be modified.  First, the AS performing modification can only provide its own ASN along with the ASN of the neighbor that the BGPsec announcment is being sent to.  Second, the AS originating the announcement must provide a signature using the organization's RPKI private key.  Recipients of a BGPsec announcement can validate the ASNs in the BGPsec path by checking the associated signatures against the ROA database.  Figure \ref{fig:bgpsec-ops} illustrates BGPsec operations.
-
-
-\begin{figure}
+\begin{figure}[hp]
   \includegraphics[width=\linewidth]{images/bgp-intercept.jpg}
   \caption{A malicious actor could announce a bogus route for a prefix with an AS path that includes the correct originating ASN and the malicious organization's ASN in the middle.  The malicious organization could choose to either terminate the connection by doing something like hosting a fake version of Youtube, or they could pass the traffic along to the real Youtube and capture the traffic passing through for offline analysis.  If this information includes encrypted financial information such as bank account numbers, then offline analysis could return highly valuable information.}
   \label{fig:bgp-intercept}
 \end{figure}
 
-\begin{figure}
+\begin{figure}[hp]
   \includegraphics[width=\linewidth]{images/bgpsec-ops.jpg}
   \caption{If BGPsec is in use, then routers can verify each BGP announcement by verifying that each ASN in the BGPsec path has signatures which match the ROA database.  If each ASN in the path has valid signaturse, then the announcement is accepted and the associated routes may be propagated through the Internet.  If any single ASN in the path does not match, or if the origin ASN does not own the advertised prefix according to the ROA database, then the route in the advertisement can be rejected.}
   \label{fig:bgpsec-ops}
 \end{figure}
 
-FIXME: table
- * Filtering:
-  * Upsides:
-   * Widely available
-   * Computationally inexpensive
-   * No coordination needed to set up
-  * Downsides:
-   * Can only be applied in certain cases near edge
-   * Configuration is rigid
-   * Empirically shown to be insufficient (near daily hijacking incidents)
- * RPKI:
-  * Upsides:
-   * Mitigates some instances; would have prevented Youtube/Pakistan incident
-   * Can be added on to existing Internet routing system
-  * Downsides:
-   * Moderately more computationally expensive
-   * Can delay valid routing changes compared to unsecured BGP
-   * Requires additional backend setup and configuration
-   * Does not prevent malicious actors case
- * BGPsec:
-  * Upsides:
-   * Can mitigate presented weaknesses; prevents malicious actors case
-   * Explicitly breaks transitive trust model 
-  * Downsides:
-   * Requires replacing entire Internet routing system for fully secure operation
-   * Significantly more computationally expensive
-   * Can delay valid routing changes compared to unsecured BGP
+\subsection{BGPsec}
+RPKI prevents many BGP hijacking issues, but it doesn't resolve all of them.  Consider malicious actors who want to intercept data destined for Youtube.  RPKI can detect the malicious network announcing it owns the Youtube IP space, but it cannot detect the case in Figure \ref{fig:bgp-intercept} of the malicious network announcing a path that passes through the malicious network but that eventually reaches Youtube, even if that path is bogus.  This is another case of BGP hijacking. 
+
+A protocol known as BGPsec attempts to mitigate this case by leveraging the RPKI infrastructure for both prefix origin validation and hop-by-hop path validation.  BGPsec replaces the AS path with a \emph{BGPsec path} and places requirements on how the path can be modified.  First, the AS performing modification can only provide its own ASN along with the ASN of the neighbor that the BGPsec announcment is being sent to.  Second, the AS originating the announcement must provide a signature using the organization's RPKI private key.  Recipients of a BGPsec announcement can validate the ASNs in the BGPsec path by checking the associated signatures against the ROA database.  Figure \ref{fig:bgpsec-ops} illustrates BGPsec operations.
 
 \section{Conclusion}
 This chapter illustrated the key weakness of transitive trust in the Internet routing protocol known as BGP, and it showed how this weakness can be exploited through BGP hijacking.  Multiple mitigation techniques for this weakness were introduced, including traditional approaches such filtering as well as newer approaches such as RPKI for origin validation and BGPsec.  BGP hijacking has been shown to occur on a near-daily basis, and thus the traditional filtering methods were shown to be insufficient to address the BGP hijacking problem at Internet scale.
 
+\begin{thebibliography}{00}
+\bibitem{b1} https://www.noction.com/blog/bgp-hijacking
+\end{thebibliography}
 
-[1] https://www.noction.com/blog/bgp-hijacking
+\newpage
 
+\begin{table*}
+\caption{Comparison of BGP Hijacking Mitigation Methods}
+\label{tab:bgp-hijacking-comparison}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Approach} & \textbf{Benefits}                                                                                                                                                      & \textbf{Drawbacks}                                                                                                                                                                                                                                   \\ \hline
+Filtering         & \begin{tabular}[c]{@{}l@{}} \textbullet Widely available\\ \textbullet Computationally inexpensive\\ \textbullet No coordination needed to set up\end{tabular}                                        & \begin{tabular}[c]{@{}l@{}} \textbullet Can only be applied in certain cases near edge\\ \textbullet Configuration is rigid\\ \textbullet Empirically shown to be insufficient\\   (near-daily   hijacking incidents)\end{tabular}                                                        \\ \hline
+RPKI              & \begin{tabular}[c]{@{}l@{}} \textbullet Mitigates many cases; would have prevented\\   Youtube/Pakistan incident\\ \textbullet Can be added on to existing Internet routing system\end{tabular} & \begin{tabular}[c]{@{}l@{}} \textbullet Moderately more computationally expensive\\ \textbullet Can delay valid routing changes compared\\   to unsecured BGP\\ \textbullet Requires additional backend setup and configuration\\ \textbullet Does not prevent malicious actors case\end{tabular} \\ \hline
+BGPsec            & \begin{tabular}[c]{@{}l@{}} \textbullet Can mitigate all presented weaknesses;\\   prevents malicious actors case\\ \textbullet Explicitly breaks transitive trust model\end{tabular}           & \begin{tabular}[c]{@{}l@{}} \textbullet Requires replacing entire Internet routing system\\   for fully secure operation\\ \textbullet Significantly more computationally expensive\\ \textbullet Can delay valid routing changes compared\\   to unsecured BGP\end{tabular}                \\ \hline
+\end{tabular}
+\end{table*}
 \end{document}
